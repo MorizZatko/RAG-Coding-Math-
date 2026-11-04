@@ -16,7 +16,8 @@ The pipeline orchestrates document conversion, image extraction and deduplicatio
 - **Hybrid Chunking & Dense Vector Indexing:** Utilizes `BAAI/bge-m3` via Sentence Transformers and ChromaDB, paired with Docling's `HybridChunker` (token-constrained) for dense semantic retrieval.
 - **Strict Anti-Hallucination Prompting:** Employs configurable system prompts that instruct the model to stay within the retrieved context, handle localized responses (German/English), and distinguish text from visual image descriptions.
 - **Dynamic LaTeX Normalization:** Automatically captures and converts block LaTeX expressions into Streamlit-compatible Markdown syntax without breaking code block formatting (for inline expressions, conversion is regex-based and best-effort).
-- **Lifecycle & Resource Management:** Features orphan segment cleanup, automated VRAM clearing (`torch.cuda.empty_cache`), LLaVA memory unloading, file persistence, and selective or global dataset resets.
+- **Lifecycle & Resource Management:** Features orphan segment cleanup, automated VRAM clearing (`torch.cuda.empty_cache`), LLaVA memory unloading, file persistence, and selective (single or multi-select via checkboxes) or global dataset resets.
+- **Persistent Chats with Context Awareness:** Every chat is saved in a local SQLite database (`chat_history.db`) and can be reopened, renamed, deleted, and continued after a restart. Follow-up questions are rewritten into standalone search queries, and a budgeted slice of the chat history is sent to the model.
 
 ## Supported File Formats
 
@@ -49,12 +50,13 @@ The system is built on a modular, decoupled architecture that isolates document 
 - **config.py:** Global vector distance threshold constants used by the chat view for text chunk and visual image matching.
 - **language.py:** Bilingual UI dictionary providing German and English string mappings.
 - **utils.py:** Data formatting utilities for localized timestamps and regex-based LaTeX syntax normalization.
-- **views/import_page.py:** File upload dashboard handling batch conversion, dynamic progress bars, ETA calculation, and cancellation controls.
+- **views/import_page.py:** File upload dashboard handling batch conversion, dynamic progress bars, ETA calculation, and cancellation controls. After a fully successful run, the tag field and upload list are cleared; results of a previous run disappear when a new run is started.
 - **views/chat_page.py:** Interactive chat interface managing message history, Ollama model parameters, retrieval filtering, and visual source rendering.
-- **views/manage_page.py:** Administrative document directory for sorting, inspecting, downloading originals, and clearing the database.
+- **views/manage_page.py:** Administrative document directory for sorting, inspecting, downloading originals, deleting single or multiple selected documents (checkboxes with "select all"), and clearing the database.
 - **pipeline/converter.py:** Docling conversion pipeline, formula enrichment heuristics, image filtering, LLaVA visual analysis, and VRAM purge controls.
 - **rag/engine.py:** RAG engine constructing contextual system prompts, localization constraints, and Ollama chat execution.
 - **rag/vectors_storage.py:** Persistent ChromaDB manager handling embedding initialization, AST code parsing, hybrid chunking, and database lifecycle.
+- **rag/chat_storage.py:** SQLite-based chat store (`chat_history.db`) for persistent chats and messages, including image references and context sources.
 
 ## Configuration & Thresholds
 
@@ -124,6 +126,7 @@ Coding-Math-RAG/
 |--- pipeline/
 |      |--- converter.py
 |--- rag/
+|      |--- chat_storage.py
 |      |--- engine.py
 |      |--- vectors_storage.py
 |--- static/
@@ -152,13 +155,13 @@ streamlit run main.py
 
 **Workflow:**
 - **Navigation:** Use the sidebar to switch between English and German, and navigate between **Data Import**, **RAG Chat**, and **Dataset Management**.
-- **Data Import:** Upload individual or batch documents (`.pdf`, `.docx`, `.py`, `.md`), assign an optional tag (category), and configure visual expand padding (in pixels).
+- **Data Import:** Upload individual or batch documents (`.pdf`, `.docx`, `.py`, `.md`), assign an optional tag (category), and configure visual expand padding (in pixels). After a fully successful run the tag and the upload list are emptied; on errors or cancellation they stay filled so you can retry. Messages of the previous run are removed as soon as a new run starts.
 - **RAG Chat:** Select an Ollama model, configure temperature and context-window token limits (up to 16,384 tokens), and inspect context sources or embedded visual figures directly under the generated answer.
-- **Dataset Management:** Inspect uploaded files, download original copies, delete specific documents, or execute a complete vector database purge.
+- **Dataset Management:** Inspect uploaded files, download original copies, delete documents individually or selectively via the checkboxes left of the file names ("Delete selected (n)", with a "select all" checkbox in the header, each with confirmation), or execute a complete vector database purge.
 
 ## Known Limitations
 - **Visual Accuracy:** LLaVA descriptions are generated automatically and may misinterpret complex axis scales or subtle data points. Original document text and figure captions take precedence.
-- **Session-Bound Chat History:** Chat history is stored in Streamlit's `st.session_state` and is not saved to a persistent database across browser or RAG restarts.
+- **Chat History Scope:** Chats are stored locally in `chat_history.db` and are not synchronized across machines.
 - **Code Language Support:** AST-based code parsing is currently implemented for Python (`.py`) files only. Other code formats should be uploaded as `.md` or plain text.
 - **Navigation Lock:** Application navigation is disabled during an active import run to prevent concurrent write collisions in ChromaDB.
 
@@ -171,8 +174,8 @@ streamlit run main.py
 
 
 ![RAG Import Page](Screenshots/RAG_Impot_Page.png)
-![RAG Chat Page](Screenshots\RAG_Chat_Page.png)
-![RAG Chat Page](Screenshots\RAG_Management_Page.png)
+![RAG Chat Page](Screenshots/RAG_Chat_Page.png)
+![RAG Chat Page](Screenshots/RAG_Management_Page.png)
 
 
 **Example Retrieval Record:**
