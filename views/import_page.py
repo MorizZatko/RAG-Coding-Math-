@@ -126,10 +126,12 @@ def _run_import(uploaded_files, custom_tag, padding_size, lang):
     st.session_state.import_state = "RUNNING"
     total_chunks = 0
     message_collector = []
+    all_succeeded = True
 
     try:
         for uploaded_file in uploaded_files:
             if st.session_state.cancel_import:
+                all_succeeded = False
                 message_collector.append(("info", lang["canceled"]))
                 break
 
@@ -174,8 +176,14 @@ def _run_import(uploaded_files, custom_tag, padding_size, lang):
         st.info(tot_msg)
         message_collector.append(("info", tot_msg))
 
+    except BaseException:
+        all_succeeded = False
+        raise
+
     finally:
         st.session_state.import_messages = message_collector
+        if all_succeeded:
+            st.session_state.reset_import_inputs = True
         st.session_state.import_state = "IDLE"
         st.session_state.cancel_import = False
         st.rerun()
@@ -191,12 +199,16 @@ def render(lang, import_running):
     st.title(lang["import_title"])
     st.write(lang["import_intro"])
 
+    if st.session_state.pop("reset_import_inputs", False):
+        st.session_state.import_tag = ""
+        st.session_state.uploader_key = st.session_state.get("uploader_key", 0) + 1
+
     col_1, col_2 = st.columns([1, 1])
 
     with col_1:
         st.subheader(lang["import_param"])
         padding_size = st.slider(lang["padding_size"], min_value=5, max_value=100, value=25, step=1, disabled=import_running)
-        custom_tag = st.text_input(lang["tag_label"], value="", disabled=import_running)
+        custom_tag = st.text_input(lang["tag_label"], key="import_tag", disabled=import_running)
 
     with col_2:
         st.subheader(lang["upload_header"])
@@ -204,6 +216,7 @@ def render(lang, import_running):
             lang["upload_label"],
             type=["pdf", "docx", "py", "md"],
             accept_multiple_files=True,
+            key=f"import_uploader_{st.session_state.get('uploader_key', 0)}",
             disabled=import_running
         )
 
@@ -221,6 +234,7 @@ def render(lang, import_running):
             st.rerun()
 
         if process_clicked:
+            st.session_state.import_messages = []
             if not uploaded_files:
                 st.warning(lang["no_files"])
             else:
