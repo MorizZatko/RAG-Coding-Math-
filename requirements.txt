@@ -1,0 +1,12 @@
+streamlit
+docling
+docling-core
+transformers
+pillow
+chromadb
+ollama
+sentence-transformers
+torchvision
+pymupdf
+onnxruntime
+# torch <--- Separatly installed with Cuda-Index (README.md)
